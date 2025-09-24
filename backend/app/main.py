@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 import os
-from app.routes import claims
+from app.routes import claims, dss
 
 # Load environment variables
 load_dotenv()
@@ -23,3 +23,4 @@ async def root():
     return {"message": "FRA DSS backend is live!"}
 
 app.include_router(claims.router)
+app.include_router(dss.router, prefix="/dss", tags=["Decision Support System"])

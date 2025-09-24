@@ -6,14 +6,20 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
 import { Button } from '../../ui/button';
 import { Progress } from '../../ui/progress';
 import { Badge } from '../../ui/badge';
-import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
 import Tesseract from 'tesseract.js';
 import axios from 'axios';
 
-// Import react-pdf components dynamically to avoid SSR issues
+// Import PDF libraries dynamically to avoid SSR issues
+let getDocument: any, GlobalWorkerOptions: any;
 let Document: any, Page: any, pdfjs: any;
 
 if (typeof window !== 'undefined') {
+  // Import pdfjs-dist dynamically
+  const pdfjsDist = require('pdfjs-dist');
+  getDocument = pdfjsDist.getDocument;
+  GlobalWorkerOptions = pdfjsDist.GlobalWorkerOptions;
+  
+  // Import react-pdf dynamically
   const reactPdf = require('react-pdf');
   Document = reactPdf.Document;
   Page = reactPdf.Page;

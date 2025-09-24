@@ -1,9 +1,11 @@
 import type { Metadata } from 'next'
+import { ClerkProvider } from '@clerk/nextjs'
 import '../styles/globals.css'
+import 'leaflet/dist/leaflet.css'
 
 export const metadata: Metadata = {
-  title: 'Land Governance Workflow System',
-  description: 'Modern land governance workflow system with OCR, GIS mapping, AI detection, blockchain, and decision support systems.',
+  title: 'FRA DSS - Forest Rights Act Decision Support System',
+  description: 'Modern Forest Rights Act decision support system with OCR, GIS mapping, AI detection, blockchain, and DSS capabilities.',
 }
 
 export default function RootLayout({
@@ -12,10 +14,12 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
-      <body>
-        {children}
-      </body>
-    </html>
+    <ClerkProvider>
+      <html lang="en">
+        <body>
+          {children}
+        </body>
+      </html>
+    </ClerkProvider>
   )
 }
