@@ -14,6 +14,8 @@ class Claim(BaseModel):
     submission_date: datetime = Field(default_factory=datetime.now)
     status: Literal["approved", "pending"] = Field(default="pending")
 
+    is_anomaly: bool = Field(default=False)
+
     class Config:
         json_encoders = {
             datetime: lambda v: v.isoformat()

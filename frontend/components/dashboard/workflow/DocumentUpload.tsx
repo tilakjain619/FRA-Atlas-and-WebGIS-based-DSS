@@ -1,13 +1,14 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
-import { Upload, File, X, CheckCircle, Eye, FileText } from 'lucide-react';
+import { Upload, File, X, CheckCircle, Eye, FileText, Send } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
 import { Button } from '../../ui/button';
 import { Progress } from '../../ui/progress';
 import { Badge } from '../../ui/badge';
-  import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
+import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
 import Tesseract from 'tesseract.js';
+import axios from 'axios';
 
 // Import react-pdf components dynamically to avoid SSR issues
 let Document: any, Page: any, pdfjs: any;
@@ -25,10 +26,14 @@ interface UploadedFile {
   size: number;
   type: string;
   progress: number;
-  status: 'uploading' | 'processing' | 'completed' | 'error';
+  status: 'uploading' | 'processing' | 'completed' | 'error' | 'submitting' | 'submitted';
   extractedText?: string;
   file?: File;
+  claimId?: string;
 }
+
+// API Base URL
+const API_BASE_URL = 'http://localhost:8000';
 
 export function DocumentUpload() {
   const [files, setFiles] = useState<UploadedFile[]>([]);
@@ -37,6 +42,7 @@ export function DocumentUpload() {
   const [selectedText, setSelectedText] = useState<string>('');
   const [isTextModalOpen, setIsTextModalOpen] = useState(false);
   const [activeIntervals, setActiveIntervals] = useState<Map<string, NodeJS.Timeout>>(new Map());
+  const [submissionStatus, setSubmissionStatus] = useState<string>('');
 
   // Set up PDF.js worker
   useEffect(() => {
@@ -184,6 +190,82 @@ const extractTextFromPDF = async (file: File, fileId: string) => {
           : f
       ));
     }
+  };
+
+  // Clean extracted text by removing extra whitespaces and formatting
+  const cleanExtractedText = (text: string): string => {
+    if (!text || typeof text !== 'string') {
+      return '';
+    }
+    
+    return text
+      .replace(/\r\n/g, '\n')         // Normalize line endings
+      .replace(/\r/g, '\n')           // Normalize line endings
+      .replace(/\s+/g, ' ')           // Replace multiple whitespaces with single space
+      .replace(/\n+/g, '\n')          // Replace multiple newlines with single newline
+      .replace(/\t/g, ' ')            // Replace tabs with spaces
+      .replace(/[^\x20-\x7E\n]/g, '')  // Remove non-printable characters except newlines
+      .trim();                        // Remove leading/trailing whitespace
+  };
+
+  // Submit extracted text to backend API
+  const submitToAPI = async (fileId: string, extractedText: string) => {
+    try {
+      setFiles(prev => prev.map(f =>
+        f.id === fileId ? { ...f, status: 'submitting' } : f
+      ));
+
+      setSubmissionStatus('Submitting to API...');
+
+      // Clean the extracted text before sending
+      const cleanedText = cleanExtractedText(extractedText);
+      
+      // Validate cleaned text
+      if (!cleanedText || cleanedText.length < 10) {
+        throw new Error('Extracted text is too short or empty after cleaning');
+      }
+      
+      console.log('Original text length:', extractedText.length);
+      console.log('Cleaned text length:', cleanedText.length);
+      console.log('Submitting to API:', { extracted_text: cleanedText.substring(0, 200) + '...' });
+
+      const response = await axios.post(`${API_BASE_URL}/claims/`, {
+        extracted_text: cleanedText
+      }, {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        timeout: 30000, // 30 second timeout
+      });
+
+      if (response.data.success) {
+        setFiles(prev => prev.map(f =>
+          f.id === fileId 
+            ? { ...f, status: 'submitted', claimId: response.data.claim_id } 
+            : f
+        ));
+        setSubmissionStatus(`Claim submitted successfully! ID: ${response.data.claim_id}`);
+        console.log('API Response:', response.data);
+      } else {
+        throw new Error('API returned success: false');
+      }
+    } catch (error: any) {
+      console.error('Error submitting to API:', error);
+      
+      let errorMessage = 'Error submitting to API. Please try again.';
+      
+      // Extract specific error message from backend response
+      if (error.response?.data?.detail) {
+        errorMessage = `API Error: ${error.response.data.detail}`;
+      } else if (error.message) {
+        errorMessage = `Network Error: ${error.message}`;
+      }
+      
+      setFiles(prev => prev.map(f =>
+        f.id === fileId ? { ...f, status: 'error' } : f
+      ));
+      setSubmissionStatus(errorMessage);
+    }
   };  const processFiles = (fileList: File[]) => {
     fileList.forEach((file) => {
       const newFile: UploadedFile = {
@@ -254,8 +336,12 @@ const extractTextFromPDF = async (file: File, fileId: string) => {
 
   const getStatusBadge = (status: string) => {
     switch (status) {
+      case 'submitted':
+        return <Badge className="bg-green-600">Submitted</Badge>;
       case 'completed':
-        return <Badge className="bg-green-500">Completed</Badge>;
+        return <Badge className="bg-green-500">Text Extracted</Badge>;
+      case 'submitting':
+        return <Badge className="bg-purple-500">Submitting</Badge>;
       case 'processing':
         return <Badge className="bg-blue-500">Processing</Badge>;
       case 'error':
@@ -315,6 +401,31 @@ const extractTextFromPDF = async (file: File, fileId: string) => {
         </CardContent>
       </Card>
 
+      {/* Submission Status */}
+      {submissionStatus && (
+        <Card>
+          <CardContent className="pt-6">
+            <div className={`p-4 rounded-lg ${
+              submissionStatus.includes('Error') 
+                ? 'bg-red-50 border border-red-200' 
+                : submissionStatus.includes('successfully')
+                ? 'bg-green-50 border border-green-200'
+                : 'bg-blue-50 border border-blue-200'
+            }`}>
+              <p className={`text-sm font-medium ${
+                submissionStatus.includes('Error') 
+                  ? 'text-red-800' 
+                  : submissionStatus.includes('successfully')
+                  ? 'text-green-800'
+                  : 'text-blue-800'
+              }`}>
+                {submissionStatus}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Uploaded Files */}
       {files.length > 0 && (
         <Card>
@@ -349,6 +460,14 @@ const extractTextFromPDF = async (file: File, fileId: string) => {
                         </p>
                       </div>
                     )}
+
+                    {file.claimId && (
+                      <div className="mt-2">
+                        <p className="text-sm text-green-600 font-medium">
+                          Claim ID: {file.claimId}
+                        </p>
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-2">
@@ -356,14 +475,26 @@ const extractTextFromPDF = async (file: File, fileId: string) => {
                       <CheckCircle className="w-5 h-5 text-green-500" />
                     )}
                     {file.extractedText && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => viewExtractedText(file.extractedText!)}
-                      >
-                        <Eye className="w-4 h-4 mr-1" />
-                        View Text
-                      </Button>
+                      <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => viewExtractedText(file.extractedText!)}
+                        >
+                          <Eye className="w-4 h-4 mr-1" />
+                          View Text
+                        </Button>
+                        {file.status === 'completed' && (
+                          <Button
+                            size="sm"
+                            onClick={() => submitToAPI(file.id, file.extractedText!)}
+                            className="bg-primary hover:bg-primary/90"
+                          >
+                            <Send className="w-4 h-4 mr-1" />
+                            Submit
+                          </Button>
+                        )}
+                      </>
                     )}
                     <Button
                       variant="ghost"
@@ -410,6 +541,20 @@ const extractTextFromPDF = async (file: File, fileId: string) => {
                 variant="outline"
               >
                 Copy Text
+              </Button>
+              <Button
+                onClick={async () => {
+                  const fileWithText = files.find(f => f.extractedText === selectedFileText);
+                  if (fileWithText && fileWithText.status === 'completed') {
+                    await submitToAPI(fileWithText.id, selectedFileText);
+                    setSelectedFileText(null);
+                  }
+                }}
+                className="bg-primary hover:bg-primary/90"
+                disabled={!files.find(f => f.extractedText === selectedFileText && f.status === 'completed')}
+              >
+                <Send className="w-4 h-4 mr-1" />
+                Submit to API
               </Button>
               <Button
                 onClick={() => setSelectedFileText(null)}

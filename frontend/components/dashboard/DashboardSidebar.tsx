@@ -25,7 +25,7 @@ export function DashboardSidebar({ activeStep, onStepChange }: SidebarProps) {
   const workflowSteps = [
     { id: 'overview', icon: Home, label: 'Overview', color: 'text-blue-600' },
     { id: 'upload', icon: Upload, label: 'Document Upload', color: 'text-blue-600' },
-    { id: 'ocr', icon: FileText, label: 'OCR + NER Data', color: 'text-purple-600' },
+    // { id: 'ocr', icon: FileText, label: 'OCR + NER Data', color: 'text-purple-600' },
     { id: 'gis', icon: Map, label: 'GIS Mapping', color: 'text-green-600' },
     { id: 'ai', icon: Brain, label: 'AI Detection', color: 'text-orange-600' },
     { id: 'blockchain', icon: Shield, label: 'Blockchain Pattas', color: 'text-indigo-600' },
